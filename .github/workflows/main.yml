@@ -1,0 +1,47 @@
+name: Update with Latest COVID-19 Data
+
+on:
+  push:
+      paths:
+        - DESCRIPTION
+  schedule:
+    - cron:  '15 22 * * 5'
+jobs:
+    build:
+        runs-on: ubuntu-20.04
+        env:
+          RENV_PATHS_ROOT: ~/.local/share/renv
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+          LANG: "en_US.UTF-8"
+          LC_ALL: "en_US.UTF-8"
+            
+        steps:
+        - uses: actions/checkout@v2
+        - uses: r-lib/actions/setup-r@v1
+          with:
+            install-r: false
+            use-public-rspm: true
+        - name: Cache packages
+          uses: actions/cache@v1
+          with:
+            path: ${{ env.RENV_PATHS_ROOT }}
+            key: ${{ runner.os }}-renv-${{ hashFiles('**/renv.lock') }}
+            restore-keys: |
+              ${{ runner.os }}-renv-
+        - name: Restore packages
+          shell: Rscript {0}
+          run: |
+            if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+            renv::restore()
+        - name: Run scrape
+          shell: Rscript {0}
+          run: |
+            source("scrape.R")
+        - name: Commit results
+          run: |
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .
+            git commit -m "[skip actions] Update the latest data" -a || echo "[skip actions] No changes to commit"
+            git push https://${{github.actor}}:${{secrets.GITHUB_TOKEN}}@github.com/${{github.repository}}.git HEAD:${{ github.ref }} || echo "No changes to commit"
+          
